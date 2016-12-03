@@ -18,6 +18,13 @@ package org.sakaiproject.commons.impl;
 
 import java.util.*;
 import java.util.stream.Collectors;
+import java.io.InputStream;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.IOException;
+import org.apache.commons.io.IOUtils;
+import java.awt.image.BufferedImage;
+import javax.imageio.ImageIO;
 
 import org.apache.commons.fileupload.FileItem;
 
@@ -462,6 +469,10 @@ public class SakaiProxyImpl implements SakaiProxy {
     public String storeFile(FileItem fileItem, String siteId) {
 
         try {
+            InputStream fileItemStream = getResetableInputStream(fileItem.getInputStream());
+            BufferedImage im = ImageIO.read(fileItemStream);
+            log.error("----------> width is " + im.getWidth());
+            log.error("----------> height is " + im.getHeight());
             String fileName = fileItem.getName();
             int lastIndexOf = fileName.lastIndexOf("/");
             if (lastIndexOf != -1 && (fileName.length() > lastIndexOf + 1)) {
@@ -487,7 +498,9 @@ public class SakaiProxyImpl implements SakaiProxy {
 
             ContentResourceEdit edit
                 = contentHostingService.addResource(toolCollection, fileName, suffix , 2);
-            edit.setContent(fileItem.getInputStream());
+            log.error("----------> markSupported is " + fileItemStream.markSupported());
+            fileItemStream.reset();
+            edit.setContent(fileItemStream);
             contentHostingService.commitResource(edit);
             return edit.getUrl();
         } catch (Exception e) {
@@ -495,4 +508,16 @@ public class SakaiProxyImpl implements SakaiProxy {
             return null;
         }
     }
+
+    // Get an input stream that we can read twice: once to get the dimensions and once to save
+    private InputStream getResetableInputStream(InputStream in) throws IOException {
+        if (in.markSupported()) {
+            return in;
+        }
+        ByteArrayOutputStream baos = new ByteArrayOutputStream();
+        org.apache.commons.io.IOUtils.copy(in, baos);
+        byte[] bytes = baos.toByteArray();
+        return new ByteArrayInputStream(bytes);
+    }
+
 }
